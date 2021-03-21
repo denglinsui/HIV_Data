@@ -2,25 +2,58 @@
 title: "HIV_Data"
 author: "Denglinsui"
 date: "2021/3/16"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 bibliography: mybib.bib
 ---
 
-# Background
-Recently, understanding the genotype-phenotype correlation provides guidance of treatment choice. @Rhee2006 related HIV-1 protease and reverse transcriptase mutations to in vitro susptibility to 16 antiretroviral drugs. Breifly speaking, we are interested in the gene mutations resistance to each drugs. This task is challenging because the sample size is not large enough compared to the complete gene mutations. A possible solution is taking advantage of expert information and considering a small collection. However, we wish to discover more potential intereting mutations and to suggest candidates for the further experiment. 
+## Introduction
+Recently, understanding the genotype-phenotype correlation guiding clinic treatment. @Rhee2006 related HIV-1 protease and reverse transcriptase mutations to in vitro susptibility to $16$ antiretroviral drugs. We want to further research with respect to their data. Breifly speaking, we are interested in the gene mutations resistance to each drugs. This task is challenging because the sample size is not large enough compared to the complete gene mutations. A possible solution is taking advantage of expert information and considering a small collection. However, we wish to discover more potential interesting mutations and to suggest candidates for the further experiment. 
 
-Our target is not just making more discoveries but controlling the false discoveries. The common criterions of controlling false discoveries are false discovery rate [@Benjamini1995; @Benjamini2001; @Barber2015] and $k$-familywise error rate[@Holm1979; @Janson2016]. We are going to explore the dataset provided by @Rhee2006 and to exploit more HIV-1 drug resistant phenotype related genotype.
+Discoverying all is equivalent to discoverying none. Our target is not just making more discoveries but with theoretical false discoveries controlling. The common criterions of controlling false discoveries are false discovery rate [@Benjamini1995; @Benjamini2001; @Barber2015] and $k$-familywise error rate[@Holm1979; @Janson2016; @Ren2020]. We are going to explore the dataset provided by @Rhee2006 and to exploit more HIV-1 drug resistant phenotype related genotype.
 
-# Explore the HIV-1 Drug Resistance Dataset
+To summary, our interested research problem are:
+
+* Finding the genes related to HIV-1 drug resistance;
+* Catching and checking the potential interactive effect among the genes.
+* Studying the correctness of discoveries versus the frequencies of them.
+
+Some discussions about question are below:
+
+* The first question could be satisfactory answered [@Benjamini1995; @Barber2015; @Holm1979; @Janson2016]. However, some new techniques grew up[@Candes2018; Sesia2018; @Ren2020] and we can try these innovative methods. 
+* The second question includes two parts: (1) Which interactive features should use consider? Are founded interactive features significant? 
+* The intuition of last question is from instability of result obtained from small sample size. This question will not be answered rigorously.
+
+## Explore the HIV-1 Drug Resistance Dataset
 The dataset is available at [HIV DRUG RESISTANCE DATABASE](http://hivdb.stanford.edu/pages/published_analysis/genophenoPNAS2006). 
 
-## Antiretroviral Drug
+```{r library, include=FALSE}
+rm(list = ls())
+# Output Table
+library(knitr)
+
+# Plot
+library(ggplot2)
+library(ggpubr)
+
+# Tidy Dataset
+library(dplyr)
+library(reshape)
+
+# Aprior Algorithm
+library(arules)
+library(arulesViz)
+
+# To discover gene
+library(knockoff)
+```
+
+
+### Antiretroviral Drug
 There are four major types of antiretroviral drugs: eight protease inhibitors(PIs), seven nucleoside and one nucleotide reverse transicriptase inhibitors(NRTIs), three nonnucleoside reverse transcriptase inhibitors(NNRTIs) amd one fusion inhibitor. The first three drug classes are included in this dataset.
 
 ```{r Drug_Class, echo=FALSE}
-rm(list = ls())
-library(knitr)
-library(ggplot2)
 drug_class_all <- c("PI","NRTI","NNRTI")
 Drug_extract <- function(drug_class){
   base_url = 'http://hivdb.stanford.edu/pages/published_analysis/genophenoPNAS2006'
@@ -40,7 +73,6 @@ Drug_extract <- function(drug_class){
               Drug_class = drug_class))
 }
 
-#PI
 res_PI <- Drug_extract("PI")
 res_NRTI <- Drug_extract("NRTI")
 res_NNRTI <- Drug_extract("NNRTI")
@@ -53,11 +85,51 @@ row.names(Drug_summary) <- NULL
 knitr::kable(Drug_summary)
 ```
 
-## Exploratory Data Analysis
-### Gene Mutations
-### Data Visualization
+### Data Description
+We demostrate the data structure with PIs as an example.
 
-Now, let us scrutinize the gene mutations. The complete gene sets varies from different drug class and we illustrate the rough distribution of the times of gene mutation for the three drug class. Compared to the gene mutations with low frequencies, we prefer those with high frequencies due to the value of further exploration and the stability of the result.
+To measure the discovery accurancy, a panel of active gene mutation obtained from larger dataset is given below.
+```{r GroundTruth}
+knitr::kable(t(res_PI$tsm_df))
+```
+
+The structure of our dataset is: The first three rows are id of a record. Row `APV` to row `SQV` are the drug names of PIs. The remaining rows are the gene information.
+```{r DataDescription}
+str(res_PI$gene_df[,1:15])
+```
+
+The missing value of the responses are:
+```{r missingval}
+res_PI$gene_df %>%
+  select(c("APV","ATV","IDV","LPV","NFV","RTV","SQV")) %>%
+  is.na() %>% 
+  colSums()
+```
+
+The number of gene position is
+```{r geneval}
+ncol(res_PI$gene_df)-which(names(res_PI$gene_df)=="P1")
+```
+
+It better to use the logarithm of the response in the analysis:
+```{r log_y}
+data <- 
+  res_PI$gene_df%>% filter(!is.na(APV)) %>%
+  select(APV, IsolateName) %>%
+  mutate(log.APV = log(APV))
+data <- melt(data, id = "IsolateName")
+  
+ggplot(data = data, aes(x=value))+
+  geom_histogram(bins = 30) +
+  facet_grid('~variable',scales="free",)
+```
+
+
+### Gene Mutations
+Now, let us scrutinize the gene mutations. The complete gene sets varies from different drug class and we illustrate the rough distribution of the times of gene mutation for the three drug class. The `y-axis` represents the position of gene, the `x-axis` denotes the type of mutations and the color means the frequencies of the $x$ mutation happening on position $y$.
+
+Compared to the gene mutations with low frequencies, we prefer those with high frequencies due to the value of further exploration and the stability of the result.
+
 ```{r Gene_Heatmap, echo=FALSE}
 heatmap_plot <- function(Drug){
   gene_df <- Drug$gene_df
@@ -92,70 +164,12 @@ heatmap_plot(res_NNRTI)
 
 ```
 
-### Preliminary Exploration
-Besides the effect of single mutation, we are also interested in the across effect of several mutations. As discussed above, we have to explore the gene combinations with high frequencies. We can apply `Aprior Algorithm` to detect the association rule, especially the support set. The effect of three drug classes need to be analyzed seperately as before.
+## Preliminary Exploration
+### Knockoff and BH procedure
 
-* To begin with, we have to flatten the matrix of the gene mutations associated with paticular genes.
-```{r Flatten, echo=FALSE}
-# Flatten a matrix to a vector with names from concatenating row/column names.
-flatten_matrix <- function(M, sep='.') {
-  x <- c(M)
-  names(x) <- c(outer(rownames(M), colnames(M),
-                      function(...) paste(..., sep=sep)))
-  x
-}
+We preparatorily apply FDR controlling procedure, Knockoff and BH procedure, to this dataset. This step is the standard step in @Barber2015 together with the method of @Candes2018.
 
-Flatten_X <- function(Drug){
-  gene_df <- Drug$gene_df
-  muts = c(LETTERS, 'i', 'd')
-  pos_start = which(names(gene_df) == 'P1')
-  
-  X = outer(muts, as.matrix(gene_df[,pos_start:ncol(gene_df)]),
-            Vectorize(grepl))
-  X = aperm(X, c(2,3,1))
-  dimnames(X)[[3]] <- muts
-  X = t(apply(X, 1, flatten_matrix))
-  mode(X) <- 'numeric'
-  return(X)
-}
-
-res <- res_PI
-X <- Flatten_X(res)
-gene_df <- res$gene_df
-pos_start <- which(names(gene_df) == 'P1')
-Y <- gene_df[,4:(pos_start-1)]
-tsm_df <- res$tsm_df
-```
-
-* Next, we apply Aprior Algorithm to the data mutation separately. Here we only use PI drugs as an example.
-```{r Aprior Algorithm}
-library(arules)
-library(arulesViz)
-
-MyTrans<-as(X[,colSums(X)!=0],"transactions")
-MyRules<-apriori(data=MyTrans,
-                 parameter=list(support=0.1,
-                                confidence = 0,
-                                minlen=2,
-                                target="rules"))
-#summary(MyTrans)
-#itemFrequencyPlot(MyTrans,topN=10,col="lightblue")
-#test <- itemFrequency(MyTrans)
-#Size <- size(MyTrans)
-#inspect(MyRules)
-
-MyRules.sorted<-sort(x=MyRules,by="support",decreasing=TRUE)
-inspect(MyRules.sorted)
-
-```
-
-* It should be noted here we do not hope to analyze the association rule among the gene but to find highly frequent itemsets.
-
-* We will do this after detect the effect after detecting the analysis for 
-
-## Knockoff and BH procedure
-
-```{r knockoff_and_bhq}
+```{r knockoff_and_bhq, include=FALSE}
 knockoff_and_bhq <- function (X, y, q) {
   # Log-transform the drug resistance measurements.
   y = log(y)
@@ -196,16 +210,54 @@ knockoff_and_bhq <- function (X, y, q) {
 }
 ```
 
-```{r run_fun}
-library(knockoff)
-fdr = 0.20
 
-Y = gene_df[,4:(pos_start-1)]
-results = lapply(Y, function(y) knockoff_and_bhq(X, y, fdr))
+```{r Flatten, echo=FALSE}
+# Flatten a matrix to a vector with names from concatenating row/column names.
+flatten_matrix <- function(M, sep='.') {
+  x <- c(M)
+  names(x) <- c(outer(rownames(M), colnames(M),
+                      function(...) paste(..., sep=sep)))
+  x
+}
+
+Flatten_X <- function(Drug){
+  gene_df <- Drug$gene_df
+  muts = c(LETTERS, 'i', 'd')
+  pos_start = which(names(gene_df) == 'P1')
+  
+  X = outer(muts, as.matrix(gene_df[,pos_start:ncol(gene_df)]),
+            Vectorize(grepl))
+  X = aperm(X, c(2,3,1))
+  dimnames(X)[[3]] <- muts
+  X = t(apply(X, 1, flatten_matrix))
+  mode(X) <- 'numeric'
+  return(X)
+}
+
 ```
 
 
-```{r plot_result}
+To begin with, we have to flatten the matrix of the gene mutations associated with paticular genes.
+```{r Flatten_X}
+res <- res_PI
+X <- Flatten_X(res)
+```
+
+After that, we apply Knockoff and BHq procedure to select features.
+```{r run_fun}
+fdr = 0.20
+
+# Define Datasets for PIs
+gene_df <- res$gene_df
+pos_start <- which(names(gene_df) == 'P1')
+tsm_df <- res$tsm_df
+Y = gene_df[,4:(pos_start-1)]
+
+# Run Knockoff and BHq algorithm
+results = lapply(Y, function(y) knockoff_and_bhq(X, y, fdr))
+```
+
+```{r plot_result, include=FALSE}
 get_position <- function(x)
   sapply(regmatches(x, regexpr('[[:digit:]]+', x)), as.numeric)
 
@@ -223,7 +275,6 @@ comparisons <- lapply(results, function(drug) {
 
 pic <- list()
 i <- 1
-library(reshape)
 for (drug in names(comparisons)) {
   plot_data <- do.call(cbind, comparisons[[drug]])
   plot_data_tmp <- data.frame(Knockoff_Fix = 
@@ -239,18 +290,89 @@ for (drug in names(comparisons)) {
   colnames(plot_data_dataframe) <- c("Criteria","Method","Discovery")
   pic[[i]] <- 
     ggplot(data=plot_data_dataframe,
-                     aes(x=Method, y = Discovery, fill=Criteria))+
+                     aes(x=Method, y = Discovery, fill=Criteria), 
+           show_guide = FALSE)+
     geom_bar(stat="identity")+
-    scale_color_brewer(palette = "Set1")+
-    labs(title = paste('Resistance to', drug))
+    scale_color_brewer(palette = "Set1")
   i <- i+1
 }
 
 ```
 
-### Summary of Result
-```{r}
 
+Finally, we show the discoveries of each drug as following:
+```{r picture}
+p.total <- ggarrange(pic[[1]], pic[[2]], pic[[3]], pic[[4]], pic[[5]],
+                     pic[[6]], pic[[7]],
+                     labels = c("APV","ATV","IDV","LPV","NFV","RTV","SQV"),
+                     ncol = 3, nrow = 3,
+                     common.legend = TRUE)
+p.total
 ```
+
+
+### Aprior Algorithm
+Besides the effect of single mutation, we are also interested in the across effect of several mutations. As discussed above, we have to explore the gene combinations with high frequencies. We can apply `Aprior Algorithm` to detect the association rule, especially the support set. The effect of three drug classes need to be analyzed seperately as before.
+
+we apply `Aprior Algorithm` to the data mutation separately. Here we only use PI drugs as an example.
+```{r Aprior Algorithm, echo=TRUE}
+MyTrans<-as(X[,colSums(X)!=0],"transactions")
+MyRules<-apriori(data=MyTrans,
+                 parameter=list(support=0.1,
+                                confidence = 0,
+                                minlen=2,
+                                target="rules"))
+
+MyRules.sorted<-sort(MyRules,by=c("support"),decreasing=TRUE)
+inspect(head(MyRules.sorted))
+```
+
+It should be noted here we do not hope to analyze the association rule among the gene mutations but to find highly frequent itemsets. It provides guidance of choosing the gene mutation set to analyzing the interactive effects.
+
+### Significant Features / Frequencies
+In this part, we are going to investigate the frequencies of siginificant features and the relationship between the itemsets found by Aprior algoritm.
+
+```{r UnionSetExtract, include=FALSE}
+Union_Set <- NULL
+for(drug in results){
+  Union_Set <- union(Union_Set,drug$Union)
+}
+
+X.Union.count <- X %>% 
+  as.data.frame() %>%
+  select(Union_Set) %>%
+  colSums()
+X.select.plot <- 
+  data.frame(Gene = Union_Set,
+             Count = X.Union.count) %>%
+  mutate(plus100 = Count>100)
+```
+
+The frequencies of siginicant genes are following:
+```{r UnionSetPlot}
+ggplot(data = X.select.plot, aes(x=Gene,y=Count, fill = plus100))+
+  geom_bar(stat="identity") + 
+  labs(title = "Count of the Selected Genes") +
+  ylim(0,650) +
+  theme(axis.text.x = element_blank()) +
+  theme(axis.ticks.x = element_blank())
+```
+
+We calculate the times of detected gene mutation in the frequent itemsets. This result will help us shrink the possible interation. However, only detected gene mutations with high frequency will be considered.
+```{r}
+Union_Apriori <- unique(c(unlist(MyRules@lhs@itemInfo)[MyRules@lhs@data@i],
+                          unlist(MyRules@rhs@itemInfo)[MyRules@rhs@data@i]))
+Intersect <- intersect(Union_Set,Union_Apriori)
+Intersect.ind <- which(unlist(MyRules@lhs@itemInfo) %in% Intersect)
+App_Total <- sum(MyRules@lhs@data@i %in% Intersect.ind) + 
+  sum(MyRules@rhs@data@i %in% Intersect.ind)
+print(sprintf("There %d times of detected gene mutation in the frequent itemsets.",App_Total))
+```
+
+## Future Plan
+My future plan is:
+* Determining the potential interactive genes mutations set;
+* Checking whether the interaction is significant with both multiple testing procedure and finite sample analysis;
+* Reasearching the relationship between the validity of discovering procedure with the frequencies of the gene mutations.
 
 # Reference
