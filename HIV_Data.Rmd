@@ -293,6 +293,7 @@ for (drug in names(comparisons)) {
                      aes(x=Method, y = Discovery, fill=Criteria), 
            show_guide = FALSE)+
     geom_bar(stat="identity")+
+    labs(title=drug)
     scale_color_brewer(palette = "Set1")
   i <- i+1
 }
@@ -304,7 +305,6 @@ Finally, we show the discoveries of each drug as following:
 ```{r picture}
 p.total <- ggarrange(pic[[1]], pic[[2]], pic[[3]], pic[[4]], pic[[5]],
                      pic[[6]], pic[[7]],
-                     labels = c("APV","ATV","IDV","LPV","NFV","RTV","SQV"),
                      ncol = 3, nrow = 3,
                      common.legend = TRUE)
 p.total
