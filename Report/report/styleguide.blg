@@ -1,0 +1,26 @@
+This is BibTeX, Version 0.99dThe top-level auxiliary file: styleguide.aux
+The style file: biometrika.bst
+Database file #1: paper-ref.bib
+I was expecting a `,' or a `}'---line 243 of file paper-ref.bib
+ :    
+ :    number = {3},
+(Error may have been on previous line)
+I'm skipping whatever remains of this entry
+Too many commas in name 1 of "Berrendero, J. R., Cuevas, A. \& Torrecilla, J. L." for entry Berrendero.etal:2015
+while executing---line 1434 of file biometrika.bst
+Too many commas in name 1 of "Berrendero, J. R., Cuevas, A. \& Torrecilla, J. L." for entry Berrendero.etal:2015
+while executing---line 1434 of file biometrika.bst
+Too many commas in name 1 of "Berrendero, J. R., Cuevas, A. \& Torrecilla, J. L." for entry Berrendero.etal:2015
+while executing---line 1434 of file biometrika.bst
+Too many commas in name 1 of "Berrendero, J. R., Cuevas, A. \& Torrecilla, J. L." for entry Berrendero.etal:2015
+while executing---line 1434 of file biometrika.bst
+Too many commas in name 1 of "Berrendero, J. R., Cuevas, A. \& Torrecilla, J. L." for entry Berrendero.etal:2015
+while executing---line 1517 of file biometrika.bst
+Too many commas in name 1 of "Berrendero, J. R., Cuevas, A. \& Torrecilla, J. L." for entry Berrendero.etal:2015
+while executing---line 1517 of file biometrika.bst
+Too many commas in name 1 of "Berrendero, J. R., Cuevas, A. \& Torrecilla, J. L." for entry Berrendero.etal:2015
+while executing---line 1517 of file biometrika.bst
+Too many commas in name 1 of "Berrendero, J. R., Cuevas, A. \& Torrecilla, J. L." for entry Berrendero.etal:2015
+while executing---line 1517 of file biometrika.bst
+Warning--empty year in Genovese2004; set to ????
+(There were 9 error messages)

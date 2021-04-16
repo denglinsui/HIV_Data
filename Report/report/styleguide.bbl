@@ -1,0 +1,111 @@
+\begin{thebibliography}{18}
+\expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
+
+\bibitem[{Barber \& Candès(2015)}]{Barber2015}
+\textsc{Barber, R.~F.} \& \textsc{Candès, E.~J.} (2015).
+\newblock Controlling the false discovery rate via knockoffs.
+\newblock \textit{The Annals of Statistics} \textbf{43}, 2055--2085.
+
+\bibitem[{Benjamini \& Hochberg(1995)}]{Benjamini1995}
+\textsc{Benjamini, Y.} \& \textsc{Hochberg, Y.} (1995).
+\newblock Controlling the false discovery rate: A practical and powerful
+  approach to multiple testing.
+\newblock \textit{Journal of the Royal Statistical Society. Series B
+  (Methodological)} \textbf{57}, 289--300.
+
+\bibitem[{Benjamini \& Yekutieli(2001)}]{Benjamini2001}
+\textsc{Benjamini, Y.} \& \textsc{Yekutieli, D.} (2001).
+\newblock The control of the false discovery rate in multiple testing under
+  dependency.
+\newblock \textit{The Annals of Statistics} \textbf{29}, 1165--1188.
+
+\bibitem[{Berrendero(2015)}]{Berrendero.etal:2015}
+\textsc{Berrendero, J.~R., C. A. . T. J.~L.} (2015).
+\newblock On the use of reproducing kernel hilbert spaces in functional
+  classification.
+\newblock \textit{arXiv} , 1507.04398v3.
+
+\bibitem[{Cleveland(1993)}]{Cleveland:1993}
+\textsc{Cleveland, W.~S.} (1993).
+\newblock \textit{{Vizualizing Data}}.
+\newblock Summit: Hobart Press.
+
+\bibitem[{Cleveland(1994)}]{Cleveland:1994}
+\textsc{Cleveland, W.~S.} (1994).
+\newblock \textit{{The Elements of Graphing Data}}.
+\newblock Summit: Hobart Press, revised ed.
+
+\bibitem[{Cox(1972)}]{Cox:1972}
+\textsc{Cox, D.~R.} (1972).
+\newblock {Regression models and life tables (with Discussion)}.
+\newblock \textit{J. R. Statist. Soc. {\rm B}} \textbf{34}, 187--220.
+
+\bibitem[{Efron et~al.(2001)Efron, Tibshirani, Storey \& Tusher}]{Efron2001}
+\textsc{Efron, B.}, \textsc{Tibshirani, R.}, \textsc{Storey, J.~D.} \&
+  \textsc{Tusher, V.} (2001).
+\newblock Empirical bayes analysis of a microarray experiment.
+\newblock \textit{Journal of the American Statistical Association} \textbf{96},
+  1151--1160.
+
+\bibitem[{Genovese \& Wasserman(????)}]{Genovese2004}
+\textsc{Genovese, C.} \& \textsc{Wasserman, L.} (????).
+\newblock A stochastic process approach to false discovery control.
+\newblock \textit{The Annals of Statistics} \textbf{32}.
+
+\bibitem[{Heard et~al.(2006)Heard, Holmes \&
+  Stephens}]{Hear:Holm:Step:quan:2006}
+\textsc{Heard, N.~A.}, \textsc{Holmes, C.~C.} \& \textsc{Stephens, D.~A.}
+  (2006).
+\newblock A quantitative study of gene regulation involved in the immune
+  response of {A}nopheline mosquitoes: {A}n application of {B}ayesian
+  hierarchical clustering of curves.
+\newblock \textit{J. Am. Statist. Assoc.} \textbf{101}, 18--29.
+
+\bibitem[{Janson \& Su(2016)}]{Janson2016}
+\textsc{Janson, L.} \& \textsc{Su, W.} (2016).
+\newblock Familywise error rate control via knockoffs.
+\newblock \textit{Electron. J. Statist.} \textbf{10}, 960--975.
+
+\bibitem[{Lei \& Fithian(2016)}]{Lei2016}
+\textsc{Lei, L.} \& \textsc{Fithian, W.} (2016).
+\newblock Adapt: An interactive procedure for multiple testing with side
+  information.
+\newblock \textit{Journal of the Royal Statistical Society: Series B
+  (Statistical Methodology)} \textbf{80}.
+
+\bibitem[{Lei et~al.(2020)Lei, Ramdas \& Fithian}]{Lei2020}
+\textsc{Lei, L.}, \textsc{Ramdas, A.} \& \textsc{Fithian, W.} (2020).
+\newblock A general interactive framework for false discovery rate control
+  under structural constraints.
+\newblock \textit{Biometrika} .
+
+\bibitem[{Li \& Barber(2018)}]{Ang2018}
+\textsc{Li, A.} \& \textsc{Barber, R.~F.} (2018).
+\newblock Multiple testing with the structure-adaptive benjamini-hochberg
+  algorithm.
+\newblock \textit{Journal of the Royal Statistical Society: Series B
+  (Statistical Methodology)} .
+
+\bibitem[{{R Development Core Team}(2012)}]{R:2010}
+\textsc{{R Development Core Team}} (2012).
+\newblock \textit{R: A Language and Environment for Statistical Computing}.
+\newblock Vienna, Austria: R Foundation for Statistical Computing.
+\newblock {ISBN} 3-900051-07-0, http://www.R-project.org.
+
+\bibitem[{Simes(1986)}]{Simes1986}
+\textsc{Simes, R.~J.} (1986).
+\newblock An improved bonferroni procedure for multiple tests of significance.
+\newblock \textit{Biometrika} \textbf{73}, 751--754.
+
+\bibitem[{Storey(2002)}]{Storey2002}
+\textsc{Storey, J.~D.} (2002).
+\newblock A direct approach to false discovery rates.
+\newblock \textit{Journal of the Royal Statistical Society. Series B
+  (Methodological)} \textbf{64}, 479--498.
+
+\bibitem[{Tufte(1983)}]{Tufte:1983}
+\textsc{Tufte, E.~R.} (1983).
+\newblock \textit{{The Visual Display of Quantitative Information}}.
+\newblock Cheshire: Graphics Press.
+
+\end{thebibliography}
