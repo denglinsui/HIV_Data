@@ -64,6 +64,7 @@ Drug_extract <- function(drug_class){
 
   tsm_df = read.delim(tsm_url, header = FALSE, stringsAsFactors = FALSE)
   names(tsm_df) = c('Position', 'Mutations')
+  
 
   pos_start = which(names(gene_df) == 'P1')
   Drug_name = paste(names(gene_df)[4:(pos_start-1)],collapse = " ")
@@ -72,6 +73,7 @@ Drug_extract <- function(drug_class){
               Drug_name = Drug_name,
               Drug_class = drug_class))
 }
+
 
 res_PI <- Drug_extract("PI")
 res_NRTI <- Drug_extract("NRTI")
@@ -91,6 +93,14 @@ We demostrate the data structure with PIs as an example.
 To measure the discovery accurancy, a panel of active gene mutation obtained from larger dataset is given below.
 ```{r GroundTruth}
 knitr::kable(t(res_PI$tsm_df))
+
+PosMut = NULL
+tsm_df <- res_PI$tsm_df
+for(i in 1:nrow(tsm_df)){
+  Pos <- tsm_df$Position[i]
+  Mut <- strsplit(tsm_df$Mutations[i], split = ' ')[[1]]
+  PosMut <- c(PosMut, paste0("P",Pos,".",Mut))
+}
 ```
 
 The structure of our dataset is: The first three rows are id of a record. Row `APV` to row `SQV` are the drug names of PIs. The remaining rows are the gene information.
