@@ -1,0 +1,377 @@
+---
+title: "HIV_Data"
+author: "Denglinsui"
+date: "2021/3/16"
+output:
+  pdf_document: default
+  html_document: default
+bibliography: mybib.bib
+---
+
+## Introduction
+Recently, understanding the genotype-phenotype correlation guiding clinic treatment. @Rhee2006 related HIV-1 protease and reverse transcriptase mutations to in vitro susptibility to $16$ antiretroviral drugs. We want to further research with respect to their data. Breifly speaking, we are interested in the gene mutations resistance to each drugs. This task is challenging because the sample size is not large enough compared to the complete gene mutations. A possible solution is taking advantage of expert information and considering a small collection. However, we wish to discover more potential interesting mutations and to suggest candidates for the further experiment. 
+
+Discoverying all is equivalent to discoverying none. Our target is not just making more discoveries but with theoretical false discoveries controlling. The common criterions of controlling false discoveries are false discovery rate [@Benjamini1995; @Benjamini2001; @Barber2015] and $k$-familywise error rate[@Holm1979; @Janson2016; @Ren2020]. We are going to explore the dataset provided by @Rhee2006 and to exploit more HIV-1 drug resistant phenotype related genotype.
+
+To summary, our interested research problem are:
+
+* Finding the genes related to HIV-1 drug resistance;
+* Catching and checking the potential interactive effect among the genes.
+* Studying the correctness of discoveries versus the frequencies of them.
+
+Some discussions about question are below:
+
+* The first question could be satisfactory answered [@Benjamini1995; @Barber2015; @Holm1979; @Janson2016]. However, some new techniques grew up[@Candes2018; Sesia2018; @Ren2020] and we can try these innovative methods. 
+* The second question includes two parts: (1) Which interactive features should use consider? Are founded interactive features significant? 
+* The intuition of last question is from instability of result obtained from small sample size. This question will not be answered rigorously.
+
+## Explore the HIV-1 Drug Resistance Dataset
+The dataset is available at [HIV DRUG RESISTANCE DATABASE](http://hivdb.stanford.edu/pages/published_analysis/genophenoPNAS2006). 
+
+```{r library, include=FALSE}
+rm(list = ls())
+# Output Table
+library(knitr)
+
+# Plot
+library(ggplot2)
+library(ggpubr)
+
+# Tidy Dataset
+library(dplyr)
+library(reshape)
+
+# Aprior Algorithm
+library(arules)
+library(arulesViz)
+
+# To discover gene
+library(knockoff)
+
+setwd("~/project/HIV_Data/Comparison")
+source("multilayer_knockoff_filter.R")
+source("aux_mkf.R")
+source("aux_knockoffs.R")
+source("p_filter.R")
+
+
+```
+
+
+### Antiretroviral Drug
+There are four major types of antiretroviral drugs: eight protease inhibitors(PIs), seven nucleoside and one nucleotide reverse transicriptase inhibitors(NRTIs), three nonnucleoside reverse transcriptase inhibitors(NNRTIs) amd one fusion inhibitor. The first three drug classes are included in this dataset.
+
+```{r Drug_Class, echo=FALSE}
+drug_class_all <- c("PI","NRTI","NNRTI")
+Drug_extract <- function(drug_class){
+  base_url = 'http://hivdb.stanford.edu/pages/published_analysis/genophenoPNAS2006'
+  gene_url = paste(base_url, 'DATA', paste0(drug_class, '_DATA.txt'), sep='/')
+  tsm_url = paste(base_url, 'MUTATIONLISTS', 'NP_TSM', drug_class, sep='/')
+  
+  gene_df = read.delim(gene_url, na.string = c('NA', ''), stringsAsFactors = FALSE)
+
+  tsm_df = read.delim(tsm_url, header = FALSE, stringsAsFactors = FALSE)
+  names(tsm_df) = c('Position', 'Mutations')
+
+  pos_start = which(names(gene_df) == 'P1')
+  Drug_name = paste(names(gene_df)[4:(pos_start-1)],collapse = " ")
+  return(list(gene_df = gene_df,
+              tsm_df = tsm_df,
+              Drug_name = Drug_name,
+              Drug_class = drug_class))
+}
+
+res_PI <- Drug_extract("PI")
+res_NRTI <- Drug_extract("NRTI")
+res_NNRTI <- Drug_extract("NNRTI")
+
+Drug_summary <- data.frame(DrugClass = drug_class_all,
+                           Drug = c(res_PI$Drug_name,
+                                    res_NRTI$Drug_name,
+                                    res_NNRTI$Drug_name))
+row.names(Drug_summary) <- NULL
+```
+
+### Data Description
+We demostrate the data structure with PIs as an example.
+
+To measure the discovery accurancy, a panel of active gene mutation obtained from larger dataset is given below.
+```{r GroundTruth}
+PosMut = NULL
+tsm_df <- res_PI$tsm_df
+for(i in 1:nrow(tsm_df)){
+  Pos <- tsm_df$Position[i]
+  Mut <- strsplit(tsm_df$Mutations[i], split = ' ')[[1]]
+  PosMut <- c(PosMut, paste0("P",Pos,".",Mut))
+}
+```
+
+
+
+
+
+
+
+### Gene Mutations
+Now, let us scrutinize the gene mutations. The complete gene sets varies from different drug class and we illustrate the rough distribution of the times of gene mutation for the three drug class. The `y-axis` represents the position of gene, the `x-axis` denotes the type of mutations and the color means the frequencies of the $x$ mutation happening on position $y$.
+
+Compared to the gene mutations with low frequencies, we prefer those with high frequencies due to the value of further exploration and the stability of the result.
+
+
+## Preliminary Exploration
+### Knockoff and BH procedure
+
+We preparatorily apply FDR controlling procedure, Knockoff and BH procedure, to this dataset. This step is the standard step in @Barber2015 together with the method of @Candes2018.
+
+```{r knockoff_and_bhq, include=FALSE}
+knockoff_and_bhq <- function (X, y, q) {
+  # Log-transform the drug resistance measurements.
+  y = log(y)
+  
+  # Remove patients with missing measurements.
+  missing = is.na(y)
+  y = y[!missing]
+  X = X[!missing,]
+  
+  # Remove predictors that appear less than 3 times.
+  X = X[,colSums(X) >= 3]
+  
+  # Remove duplicate predictors.
+  X = X[,colSums(abs(cor(X)-1) < 1e-4) == 1]
+  
+  # Run the knockoff filter.
+  knock.gen = function(x) create.fixed(x, method='equi')
+  result = knockoff.filter(X, y, fdr=q, knockoffs=knock.gen, statistic=stat.glmnet_lambdasmax)
+  knockoff_selected = names(result$selected)
+  
+  # Run the multilayer filter
+  # MULTILAYER KNOCKOFF FILTER OPTIONS
+  fdr.multi = c(q,q)
+  knockoff_type = "fixed_equi"
+  statistic_type = "group_LSM" 
+  FDP_hat_type = "kn+"
+  groups.tmp <- get_position(colnames(X))
+  all.gen <- unique(groups.tmp)
+  groups <- matrix(sapply(groups.tmp, 
+                          function(x){which(all.gen==x)}),
+                   ncol=1)
+  groups <- cbind(1:nrow(groups),groups)
+  # RUN MULTILAYER KNOCKOFF FILTER
+  output = multilayer_knockoff_filter(X, y, groups, fdr.multi,
+                                      knockoff_type,
+                                      statistic_type, FDP_hat_type)
+  knockoff_selected_2ndO <- colnames(X)[output$S_hat]
+  
+  # Run the knockoff filter(Second Order).
+  knock.gen = function(x) create.second_order(x, method='equi')
+  result = knockoff.filter(X, y, fdr=q, knockoffs=knock.gen, statistic=stat.glmnet_lambdasmax)
+  #knockoff_selected_2ndO = names(result$selected)
+  
+  # Run BHq.
+  p = ncol(X)
+  lm.fit = lm(y ~ X - 1) # no intercept
+  p.values = coef(summary(lm.fit))[,4]
+  names(p.values) <- substring(names(p.values),2)
+  cutoff = max(c(0, which(sort(p.values) <= q * (1:p) / p)))
+  bhq_selected = names(which(p.values <= q * cutoff / p))
+  
+  # Run p-filter
+  p_filter = pfilter(p.values, fdr.multi, groups)
+  Union =  colnames(X)[which(p_filter==1)]
+  # Union Result
+  #Union = union(knockoff_selected, union(knockoff_selected_2ndO, bhq_selected))
+  list(Knockoff = knockoff_selected,Knockoff_2ndO = knockoff_selected_2ndO,
+       BHq = bhq_selected, Union = Union)
+}
+```
+
+
+```{r Flatten, echo=FALSE}
+# Flatten a matrix to a vector with names from concatenating row/column names.
+flatten_matrix <- function(M, sep='.') {
+  x <- c(M)
+  names(x) <- c(outer(rownames(M), colnames(M),
+                      function(...) paste(..., sep=sep)))
+  x
+}
+
+Flatten_X <- function(Drug){
+  gene_df <- Drug$gene_df
+  muts = c(LETTERS, 'i', 'd')
+  pos_start = which(names(gene_df) == 'P1')
+  
+  X = outer(muts, as.matrix(gene_df[,pos_start:ncol(gene_df)]),
+            Vectorize(grepl))
+  X = aperm(X, c(2,3,1))
+  dimnames(X)[[3]] <- muts
+  X = t(apply(X, 1, flatten_matrix))
+  mode(X) <- 'numeric'
+  return(X)
+}
+
+```
+
+
+To begin with, we have to flatten the matrix of the gene mutations associated with paticular genes.
+```{r Flatten_X}
+res <- res_PI
+X <- Flatten_X(res)
+```
+
+After that, we apply Knockoff and BHq procedure to select features.
+```{r run_fun}
+fdr = 0.20
+
+get_position <- function(x)
+  sapply(regmatches(x, regexpr('[[:digit:]]+', x)), as.numeric)
+
+# Define Datasets for PIs
+gene_df <- res$gene_df
+pos_start <- which(names(gene_df) == 'P1')
+tsm_df <- res$tsm_df
+Y = gene_df[,4:(pos_start-1)]
+
+# Run Knockoff and BHq algorithm
+results = lapply(Y, function(y) knockoff_and_bhq(X, y, fdr))
+```
+
+```{r plot_result, include=FALSE}
+
+comparisons <- lapply(results, function(drug) {
+  lapply(drug, function(selected) {
+    positions = unique(get_position(selected)) # remove possible duplicates
+    discoveries = length(positions)
+    false_discoveries = length(setdiff(positions, tsm_df$Position))
+    list(true_discoveries = discoveries - false_discoveries,
+         false_discoveries = false_discoveries,
+         fdp = false_discoveries / max(1, discoveries),
+         dp = (discoveries - false_discoveries) / length(tsm_df$Position))
+  })
+})
+
+pic <- list()
+i <- 1
+for (drug in names(comparisons)) {
+  plot_data <- do.call(cbind, comparisons[[drug]])
+  ind.plot <- c(3,4)
+    
+  plot_data_tmp <- data.frame(KF = 
+                           as.numeric(plot_data[ind.plot,'Knockoff']),
+                         MKF =
+                           as.numeric(plot_data[ind.plot,'Knockoff_2ndO']),
+                         BH = as.numeric(plot_data[ind.plot,'BHq']),
+                         PF = as.numeric(plot_data[ind.plot,'Union']),
+                         Criteria = rownames(plot_data)[ind.plot])
+  
+  plot_data_dataframe <- melt(plot_data_tmp, id=c("Criteria"))
+  
+  colnames(plot_data_dataframe) <- c("Criteria","Method","Discovery")
+  pic[[i]] <- 
+    ggplot(data=plot_data_dataframe,
+                     aes(x=Method, y = Discovery, fill=Criteria), 
+           show_guide = FALSE)+
+    geom_bar(stat="identity", position = "dodge")+
+    labs(title=drug)+
+    scale_color_brewer(palette = "Set1")
+  i <- i+1
+}
+
+```
+
+Finally, we show the discoveries of each drug as following:
+```{r picture}
+p.total <- ggarrange(pic[[1]], pic[[2]], pic[[3]], pic[[4]], pic[[5]],
+                     pic[[6]], pic[[7]],
+                     ncol = 3, nrow = 3,
+                     common.legend = TRUE)
+p.total
+```
+
+
+```{r plot_result_PosMut, include=FALSE}
+comparisons_posmut <- lapply(results, function(drug) {
+  lapply(drug, function(selected) {
+    discoveries = length(selected)
+    false_discoveries = length(setdiff(selected, PosMut))
+    list(true_discoveries = discoveries - false_discoveries,
+         false_discoveries = false_discoveries,
+         fdp = false_discoveries / max(1, discoveries),
+         dp = (discoveries - false_discoveries) / length(PosMut))
+  })
+})
+
+pic <- list()
+i <- 1
+for (drug in names(comparisons)) {
+  plot_data <- do.call(cbind, comparisons_posmut[[drug]])
+  
+  ind.plot <- c(3,4)
+  
+  plot_data_tmp <- data.frame(KF = 
+                           as.numeric(plot_data[ind.plot,'Knockoff']),
+                         MKF =
+                           as.numeric(plot_data[ind.plot,'Knockoff_2ndO']),
+                         BH = as.numeric(plot_data[ind.plot,'BHq']),
+                         PF = as.numeric(plot_data[ind.plot,'Union']),
+                         Criteria = rownames(plot_data)[ind.plot])
+  
+  plot_data_dataframe <- melt(plot_data_tmp, id=c("Criteria"))
+  
+  colnames(plot_data_dataframe) <- c("Criteria","Method","Discovery")
+  pic[[i]] <- 
+    ggplot(data=plot_data_dataframe,
+                     aes(x=Method, y = Discovery, fill=Criteria), 
+           show_guide = FALSE)+
+    geom_bar(stat="identity", position ="dodge")+
+    labs(title=drug)
+    scale_color_brewer(palette = "Set1")
+  i <- i+1
+}
+
+```
+
+Finally, we show the discoveries of each drug as following:
+```{r picture}
+p.total <- ggarrange(pic[[1]], pic[[2]], pic[[3]], pic[[4]], pic[[5]],
+                     pic[[6]], pic[[7]],
+                     ncol = 3, nrow = 3,
+                     common.legend = TRUE)
+p.total
+```
+
+
+### Aprior Algorithm
+Besides the effect of single mutation, we are also interested in the across effect of several mutations. As discussed above, we have to explore the gene combinations with high frequencies. We can apply `Aprior Algorithm` to detect the association rule, especially the support set. The effect of three drug classes need to be analyzed seperately as before.
+
+we apply `Aprior Algorithm` to the data mutation separately. Here we only use PI drugs as an example.
+
+### Significant Features / Frequencies
+In this part, we are going to investigate the frequencies of siginificant features and the relationship between the itemsets found by Aprior algoritm.
+
+```{r UnionSetExtract, include=FALSE}
+Union_Set <- NULL
+for(drug in results){
+  Union_Set <- union(Union_Set,drug$Union)
+}
+
+X.Union.count <- X %>% 
+  as.data.frame() %>%
+  select(Union_Set) %>%
+  colSums()
+X.select.plot <- 
+  data.frame(Gene = Union_Set,
+             Count = X.Union.count) %>%
+  mutate(plus100 = Count>100)
+```
+
+The frequencies of siginicant genes are following:
+```{r UnionSetPlot}
+ggplot(data = X.select.plot, aes(x=Gene,y=Count, fill = plus100))+
+  geom_bar(stat="identity") + 
+  labs(title = "Count of the Selected Genes") +
+  ylim(0,650) +
+  theme(axis.text.x = element_blank()) +
+  theme(axis.ticks.x = element_blank())
+```
+
+# Reference
