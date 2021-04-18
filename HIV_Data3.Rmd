@@ -1,0 +1,415 @@
+---
+title: "HIV_Data"
+author: "Denglinsui"
+date: "2021/3/16"
+output:
+  pdf_document: default
+  html_document: default
+bibliography: mybib.bib
+---
+
+```{r library, include=FALSE}
+rm(list = ls())
+# Output Table
+library(knitr)
+
+# Plot
+library(ggplot2)
+library(ggpubr)
+
+# Tidy Dataset
+library(dplyr)
+library(reshape)
+
+# Aprior Algorithm
+library(arules)
+library(arulesViz)
+
+# To discover gene
+library(knockoff)
+
+setwd("~/project/HIV_Data/Comparison")
+source("multilayer_knockoff_filter.R")
+source("aux_mkf.R")
+source("aux_knockoffs.R")
+source("p_filter.R")
+
+
+```
+
+
+### Antiretroviral Drug
+There are four major types of antiretroviral drugs: eight protease inhibitors(PIs), seven nucleoside and one nucleotide reverse transicriptase inhibitors(NRTIs), three nonnucleoside reverse transcriptase inhibitors(NNRTIs) amd one fusion inhibitor. The first three drug classes are included in this dataset.
+
+```{r Drug_Class, echo=FALSE}
+drug_class_all <- c("PI","NRTI","NNRTI")
+Drug_extract <- function(drug_class){
+  base_url = 'http://hivdb.stanford.edu/pages/published_analysis/genophenoPNAS2006'
+  gene_url = paste(base_url, 'DATA', paste0(drug_class, '_DATA.txt'), sep='/')
+  tsm_url = paste(base_url, 'MUTATIONLISTS', 'NP_TSM', drug_class, sep='/')
+  
+  gene_df = read.delim(gene_url, na.string = c('NA', ''), stringsAsFactors = FALSE)
+
+  tsm_df = read.delim(tsm_url, header = FALSE, stringsAsFactors = FALSE)
+  names(tsm_df) = c('Position', 'Mutations')
+
+  pos_start = which(names(gene_df) == 'P1')
+  Drug_name = paste(names(gene_df)[4:(pos_start-1)],collapse = " ")
+  return(list(gene_df = gene_df,
+              tsm_df = tsm_df,
+              Drug_name = Drug_name,
+              Drug_class = drug_class))
+}
+
+res_PI <- Drug_extract("PI")
+res_NRTI <- Drug_extract("NRTI")
+res_NNRTI <- Drug_extract("NNRTI")
+
+Drug_summary <- data.frame(DrugClass = drug_class_all,
+                           Drug = c(res_PI$Drug_name,
+                                    res_NRTI$Drug_name,
+                                    res_NNRTI$Drug_name))
+row.names(Drug_summary) <- NULL
+```
+
+
+```{r GroundTruth}
+PosMut = NULL
+tsm_df <- res_PI$tsm_df
+for(i in 1:nrow(tsm_df)){
+  Pos <- tsm_df$Position[i]
+  Mut <- strsplit(tsm_df$Mutations[i], split = ' ')[[1]]
+  PosMut <- c(PosMut, paste0("P",Pos,".",Mut))
+}
+```
+
+
+
+
+```{r knockoff_and_bhq, include=FALSE}
+knockoff_and_bhq <- function (X, y, q) {
+  # Log-transform the drug resistance measurements.
+  y = log(y)
+  
+  # Remove patients with missing measurements.
+  missing = is.na(y)
+  y = y[!missing]
+  X = X[!missing,]
+  
+  # Remove predictors that appear less than 3 times.
+  X = X[,colSums(X) >= 3]
+  
+  # Remove duplicate predictors.
+  X = X[,colSums(abs(cor(X)-1) < 1e-4) == 1]
+  
+  # Run the knockoff filter.
+  knock.gen = function(x) create.fixed(x, method='equi')
+  result = knockoff.filter(X, y, fdr=q, 
+                           knockoffs=knock.gen, 
+                           statistic=stat.glmnet_lambdasmax)
+  knockoff_selected = names(result$selected)
+  
+  # Run the multilayer filter
+  # MULTILAYER KNOCKOFF FILTER OPTIONS
+  fdr.multi = c(q,q)
+  knockoff_type = "fixed_equi"
+  statistic_type = "group_LSM" 
+  FDP_hat_type = "kn+"
+  groups.tmp <- get_position(colnames(X))
+  all.gen <- unique(groups.tmp)
+  groups <- matrix(sapply(groups.tmp, 
+                          function(x){which(all.gen==x)}),
+                   ncol=1)
+  groups <- cbind(1:nrow(groups),groups)
+  
+  # RUN MULTILAYER KNOCKOFF FILTER
+  output = multilayer_knockoff_filter(X, y, groups, fdr.multi,
+                                      knockoff_type,
+                                      statistic_type, FDP_hat_type)
+  knockoff_selected_multi <- colnames(X)[output$S_hat]
+  
+  # Run the knockoff filter(Second Order).
+  knock.gen = function(x) create.second_order(x, method='equi')
+  result = knockoff.filter(X, y, fdr=q, knockoffs=knock.gen, statistic=stat.glmnet_lambdasmax)
+  #knockoff_selected_2ndO = names(result$selected)
+  
+  # Run BHq.
+  p = ncol(X)
+  lm.fit = lm(y ~ X - 1) # no intercept
+  p.values = coef(summary(lm.fit))[,4]
+  names(p.values) <- substring(names(p.values),2)
+  cutoff = max(c(0, which(sort(p.values) <= q * (1:p) / p)))
+  bhq_selected = names(which(p.values <= q * cutoff / p))
+  
+  # Run p-filter
+  p_filter = pfilter(p.values, fdr.multi, groups)
+  PF =  colnames(X)[which(p_filter==1)]
+  # PF Result
+  #PF = PF(knockoff_selected, PF(knockoff_selected_2ndO, bhq_selected))
+  list(Knockoff = knockoff_selected,MKF = knockoff_selected_multi,
+       BHq = bhq_selected, PF = PF)
+}
+```
+
+
+```{r Flatten, echo=FALSE}
+# Flatten a matrix to a vector with names from concatenating row/column names.
+flatten_matrix <- function(M, sep='.') {
+  x <- c(M)
+  names(x) <- c(outer(rownames(M), colnames(M),
+                      function(...) paste(..., sep=sep)))
+  x
+}
+
+Flatten_X <- function(Drug){
+  gene_df <- Drug$gene_df
+  muts = c(LETTERS, 'i', 'd')
+  pos_start = which(names(gene_df) == 'P1')
+  
+  X = outer(muts, as.matrix(gene_df[,pos_start:ncol(gene_df)]),
+            Vectorize(grepl))
+  X = aperm(X, c(2,3,1))
+  dimnames(X)[[3]] <- muts
+  X = t(apply(X, 1, flatten_matrix))
+  mode(X) <- 'numeric'
+  return(X)
+}
+
+```
+
+
+To begin with, we have to flatten the matrix of the gene mutations associated with paticular genes.
+```{r Flatten_X}
+res <- res_PI
+X <- Flatten_X(res)
+```
+
+After that, we apply Knockoff and BHq procedure to select features.
+```{r run_fun}
+fdr = 0.20
+
+get_position <- function(x)
+  sapply(regmatches(x, regexpr('[[:digit:]]+', x)), as.numeric)
+
+# Define Datasets for PIs
+gene_df <- res$gene_df
+pos_start <- which(names(gene_df) == 'P1')
+tsm_df <- res$tsm_df
+Y = gene_df[,4:(pos_start-1)]
+
+# Run Knockoff and BHq algorithm
+results = lapply(Y, function(y) knockoff_and_bhq(X, y, fdr))
+```
+
+```{r Extract_info_pos, include=FALSE}
+
+comparisons_pos <- lapply(results, function(drug) {
+  lapply(drug, function(selected) {
+    positions = unique(get_position(selected)) # remove possible duplicates
+    discoveries = length(positions)
+    false_discoveries = length(setdiff(positions, tsm_df$Position))
+    list(true_discoveries = discoveries - false_discoveries,
+         false_discoveries = false_discoveries,
+         fdp = false_discoveries / max(1, discoveries),
+         dp = (discoveries - false_discoveries) / length(tsm_df$Position))
+  })
+})
+
+
+plot_data_pos <- NULL
+for (drug in names(comparisons_pos)) {
+  plot_data <- do.call(cbind, comparisons_pos[[drug]])
+  
+  plot_data_pos <- rbind(plot_data_pos,
+                         data.frame(KF = 
+                           as.numeric(plot_data[,'Knockoff']),
+                         MKF =
+                           as.numeric(plot_data[,'MKF']),
+                         BH = as.numeric(plot_data[,'BHq']),
+                         PF = as.numeric(plot_data[,'PF']),
+                         Criteria = rownames(plot_data),
+                         drug = rep(drug,nrow(plot_data))))
+}
+
+```
+
+
+```{r Extract_info_PosMut, include=FALSE}
+comparisons_posmut <- lapply(results, function(drug) {
+  lapply(drug, function(selected) {
+    selected <- unique(selected)
+    discoveries = length(selected)
+    false_discoveries = length(setdiff(selected, PosMut))
+    list(true_discoveries = discoveries - false_discoveries,
+         false_discoveries = false_discoveries,
+         fdp = false_discoveries / max(1, discoveries),
+         dp = (discoveries - false_discoveries) / length(PosMut))
+  })
+})
+
+plot_data_posmut <- NULL
+for (drug in names(comparisons_posmut)) {
+  plot_data <- do.call(cbind, comparisons_posmut[[drug]])
+  
+  plot_data_posmut <- rbind(plot_data_posmut,
+                         data.frame(KF = 
+                           as.numeric(plot_data[,'Knockoff']),
+                         MKF =
+                           as.numeric(plot_data[,'MKF']),
+                         BH = as.numeric(plot_data[,'BHq']),
+                         PF = as.numeric(plot_data[,'PF']),
+                         Criteria = rownames(plot_data),
+                         drug = rep(drug,nrow(plot_data))))
+}
+
+```
+
+```{r plot_data_1}
+Criteria <- c("fdp","dp")
+plot_data <- function(data, criteria, title.main){
+  data <- 
+    data %>% 
+    filter( Criteria %in% criteria) 
+  data <- melt(data,  id=c("Criteria","drug"))
+  data <- reshape2::dcast(data, drug+variable~Criteria,
+                          value.var = "value")
+  p <- 
+    ggplot(data, aes(x=fdp, y =dp, 
+                     color = variable))+
+    geom_point()+
+    geom_vline(aes(xintercept=fdr), linetype = 2)+
+    labs(title=title.main)
+}
+
+p.pos <- plot_data(plot_data_pos, Criteria, "Position")
+p.posmut <- plot_data(plot_data_posmut, Criteria,"Position+Direction")
+
+p.pos
+p.posmut
+```
+```{r multi_task, include=FALSE}
+knockoff_and_bhq.combine <- function (X, Y, q) {
+  # Combine Y together
+  n <- nrow(X)
+  p <- ncol(X)
+  num.task <- ncol(Y)
+  drug.type <- rep(names(Y), each = nrow(X))
+  X.new <- matrix(0, ncol = ncol(X)*num.task, nrow = num.task*nrow(X))
+  for(i in 1:num.task){
+    ind.x <- (1+(i-1)*n) : (i*n )
+    ind.y <- (1+(i-1)*p) : (i*p )
+    X.new[ind.x, ind.y] <- X
+  }
+  colnames(X.new) <- rep(colnames(X),times = num.task)
+  
+  y <- as.numeric(unlist(Y))
+    
+  # Log-transform the drug resistance measurements.
+  y = log(y)
+  
+  # Remove patients with missing measurements.
+  missing = is.na(y)
+  y = y[!missing]
+  X.new = X.new[!missing,]
+  drug.type = drug.type[!missing]
+  
+  # Remove predictors that appear less than 3 times.
+  X.new.ind <- colSums(X.new) >= 5
+  X.new = X.new[,X.new.ind]
+    
+  # Remove duplicate predictors.
+  X.new.ind <- colSums(abs(cor(X.new)-1) < 1e-4) == 1
+  X.new = X.new[,X.new.ind]
+  
+  gene.groups.tmp <- colnames(X.new)
+  gene.all.gen <- unique(gene.groups.tmp)
+  gene.group <- matrix(sapply(gene.groups.tmp,
+                               function(x){which(gene.all.gen==x)}),
+                        ncol=1)
+  # Run the group knockoff.
+  
+  # Run the multilayer filter
+  fdr.multi = c(q,q)
+  knockoff_type = "fixed_equi"
+  statistic_type = "group_LSM" 
+  FDP_hat_type = "kn+"
+  
+  # group_knockoff_single pos+direction
+  
+  output.group = multilayer_knockoff_filter(X.new, y, gene.group, c(q),
+                                            knockoff_type,
+                                            statistic_type, FDP_hat_type)
+  knockoff_selected.group <- colnames(X.new)[output.group$S_hat]
+  
+  # MULTILAYER KNOCKOFF FILTER OPTIONS
+  groups.tmp <- get_position(colnames(X.new))
+  all.gen <- unique(groups.tmp)
+  groups <- matrix(sapply(groups.tmp, 
+                          function(x){which(all.gen==x)}),
+                   ncol=1)
+  groups <- cbind(gene.group,groups)
+  
+  # RUN MULTILAYER KNOCKOFF FILTER
+  output = multilayer_knockoff_filter(X.new, y, groups, fdr.multi,
+                                      knockoff_type,
+                                      statistic_type, FDP_hat_type)
+  knockoff_selected_MKF.group <- colnames(X.new)[output$S_hat]
+  
+  # Run BHq.
+  p = ncol(X.new)
+  lm.fit = lm(y ~ X.new - 1) # no intercept
+  p.values = coef(summary(lm.fit))[,4]
+  names(p.values) <- substring(names(p.values),2)
+  cutoff = max(c(0, which(sort(p.values) <= q * (1:p) / p)))
+  bhq_selected = names(which(p.values <= q * cutoff / p))
+  
+  # Run p-filter
+  BH.group <- pfilter(p.values, q, gene.group)
+  BH.selected <- colnames(X)[which(BH.group==1)]
+  
+  # Run p-filter
+  p_filter = pfilter(p.values, fdr.multi, groups)
+  PF =  colnames(X)[which(p_filter==1)]
+  # PF Result
+  #PF = PF(knockoff_selected, PF(knockoff_selected_2ndO, bhq_selected))
+  list(Knockoff = knockoff_selected.group,
+       MKF = knockoff_selected_MKF.group,
+       BHq = BH.selected, 
+       bhq = bhq.selected,
+       PF = PF)
+}
+
+```
+
+```{r}
+result.combine <- knockoff_and_bhq.combine(X, Y, fdr) 
+  
+```
+
+```{r}
+comparisons_pos.combine <- 
+ lapply(result.combine, function(selected) {
+    positions = unique(get_position(selected)) # remove possible duplicates
+    discoveries = length(positions)
+    false_discoveries = length(setdiff(positions, tsm_df$Position))
+    list(true_discoveries = discoveries - false_discoveries,
+         false_discoveries = false_discoveries,
+         fdp = false_discoveries / max(1, discoveries),
+         dp = (discoveries - false_discoveries) / length(tsm_df$Position))
+  })
+```
+
+
+```{r}
+comparisons_posmut.combine <- 
+  lapply(result.combine, function(selected) {
+    selected <- unique(selected)
+    discoveries = length(selected)
+    false_discoveries = length(setdiff(selected, PosMut))
+    list(true_discoveries = discoveries - false_discoveries,
+         false_discoveries = false_discoveries,
+         fdp = false_discoveries / max(1, discoveries),
+         dp = (discoveries - false_discoveries) / length(PosMut))
+  })
+```
+
