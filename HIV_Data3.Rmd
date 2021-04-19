@@ -266,27 +266,31 @@ for (drug in names(comparisons_posmut)) {
 
 ```{r plot_data_1}
 Criteria <- c("fdp","dp")
-plot_data <- function(data, criteria, title.main){
+plot_data <- function(data, criteria){
   data <- 
     data %>% 
     filter( Criteria %in% criteria) 
-  data <- melt(data,  id=c("Criteria","drug"))
-  data <- reshape2::dcast(data, drug+variable~Criteria,
+  data <- melt(data,  id=c("Criteria","drug","Layer"))
+  data <- reshape2::dcast(data, drug+variable+Layer~Criteria,
                           value.var = "value")
   p <- 
     ggplot(data, aes(x=fdp, y =dp, 
                      color = variable))+
     geom_point()+
     geom_vline(aes(xintercept=fdr), linetype = 2)+
-    labs(title=title.main)
+    facet_wrap(.~Layer)
 }
 
-p.pos <- plot_data(plot_data_pos, Criteria, "Position")
-p.posmut <- plot_data(plot_data_posmut, Criteria,"Position+Direction")
+plot_data.sep <- rbind(plot_data_pos %>% 
+                         mutate(Layer="Layer: Position"),
+                       plot_data_posmut %>%
+                         mutate(Layer="Layer: Position+Direction"))
+p.sep <- plot_data(plot_data.sep, Criteria)
+p.sep
 
-p.pos
-p.posmut
+ggsave("Sep.eps", width = 8, height = 4)
 ```
+
 ```{r multi_task, include=FALSE}
 knockoff_and_bhq.combine <- function (X, Y, q) {
   # Combine Y together
@@ -314,7 +318,7 @@ knockoff_and_bhq.combine <- function (X, Y, q) {
   drug.type = drug.type[!missing]
   
   # Remove predictors that appear less than 3 times.
-  X.new.ind <- colSums(X.new) >= 5
+  X.new.ind <- colSums(X.new) >= 3
   X.new = X.new[,X.new.ind]
     
   # Remove duplicate predictors.
@@ -359,23 +363,23 @@ knockoff_and_bhq.combine <- function (X, Y, q) {
   p = ncol(X.new)
   lm.fit = lm(y ~ X.new - 1) # no intercept
   p.values = coef(summary(lm.fit))[,4]
-  names(p.values) <- substring(names(p.values),2)
+  names(p.values) <- substring(names(p.values),6)
   cutoff = max(c(0, which(sort(p.values) <= q * (1:p) / p)))
   bhq_selected = names(which(p.values <= q * cutoff / p))
   
   # Run p-filter
   BH.group <- pfilter(p.values, q, gene.group)
-  BH.selected <- colnames(X)[which(BH.group==1)]
+  BH.selected <- colnames(X.new)[which(BH.group==1)]
   
   # Run p-filter
   p_filter = pfilter(p.values, fdr.multi, groups)
-  PF =  colnames(X)[which(p_filter==1)]
+  PF =  colnames(X.new)[which(p_filter==1)]
   # PF Result
   #PF = PF(knockoff_selected, PF(knockoff_selected_2ndO, bhq_selected))
   list(Knockoff = knockoff_selected.group,
        MKF = knockoff_selected_MKF.group,
        BHq = BH.selected, 
-       bhq = bhq.selected,
+       bhq = bhq_selected,
        PF = PF)
 }
 
@@ -411,5 +415,48 @@ comparisons_posmut.combine <-
          fdp = false_discoveries / max(1, discoveries),
          dp = (discoveries - false_discoveries) / length(PosMut))
   })
+```
+
+
+
+```{r}
+plot_data.tmp <-  do.call(cbind, comparisons_pos.combine)
+  
+plot_data_pos.combine <- data.frame(
+                                 GKF =  
+                                   as.numeric(plot_data.tmp[,'Knockoff']),
+                                  MKF = as.numeric(plot_data.tmp[,'MKF']),
+                                  GBH = as.numeric(plot_data.tmp[,'BHq']),
+                                  BH = as.numeric(plot_data.tmp[,'bhq']),
+                                  PF = as.numeric(plot_data.tmp[,'PF']),
+                                  Criteria = rownames(plot_data.tmp),
+                                  drug = rep("PI",nrow(plot_data.tmp)))
+
+
+plot_data.tmp <-  do.call(cbind, comparisons_posmut.combine)
+  
+plot_data_posmut.combine <- data.frame(
+                                 GKF =  
+                                   as.numeric(plot_data.tmp[,'Knockoff']),
+                                  MKF = as.numeric(plot_data.tmp[,'MKF']),
+                                  GBH = as.numeric(plot_data.tmp[,'BHq']),
+                                  BH = as.numeric(plot_data.tmp[,'bhq']),
+                                  PF = as.numeric(plot_data.tmp[,'PF']),
+                                  Criteria = rownames(plot_data.tmp),
+                                  drug = rep("PI",nrow(plot_data.tmp)))
+```
+
+
+```{r}
+Criteria <- c("fdp","dp")
+
+plot_data.combine <- rbind(plot_data_pos.combine %>% 
+                         mutate(Layer="Layer: Position"),
+                       plot_data_posmut.combine %>%
+                         mutate(Layer="Layer: Position+Direction"))
+p.combine <- plot_data(plot_data.combine, Criteria)
+p.combine
+
+ggsave("Combine.eps", width = 8, height = 4)
 ```
 
