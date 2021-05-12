@@ -14,4 +14,4 @@ The folders in main folder are:
 * `shiny`: Include the file for [Rshiny](https://3mk6f0-linsui-deng.shinyapps.io/HIVDataResistance/);
 * `Report and Slides`: Include the final report and the final slides (More details could be found in this folder);
 
-Some visualization is on [Rshiny for HIV Data](https://3mk6f0-linsui-deng.shinyapps.io/HIVDataResistance/).
+Some visualization is on [Rshiny for HIV Data](https://3mk6f0-linsui-deng.shinyapps.io/HIVDataResistance/). Since the computation and space cost is high, I store the results for target FDR level 0.2 and visualize. If you prefer other target FDR level, `MainAnalysis.R` is a nice choice. It will suggest you some potential gene associated with HIV-drug resistant with user-specified drug class and target FDR level. More criterion, like the number of false discoveries and the number of true discoveries, also could be found in the result.
