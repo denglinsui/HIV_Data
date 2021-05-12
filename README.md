@@ -13,3 +13,5 @@ The folders in main folder are:
 * `Figure` and `picture`: Include the some output figures (Some results haven't been uploaded but can be generated via `MainAnalysis.R` and `SideAnalysis.R`);
 * `shiny`: Include the file for [Rshiny](https://3mk6f0-linsui-deng.shinyapps.io/HIVDataResistance/);
 * `Report and Slides`: Include the final report and the final slides (More details could be found in this folder);
+
+Some visualization is on [Rshiny for HIV Data](https://3mk6f0-linsui-deng.shinyapps.io/HIVDataResistance/).
