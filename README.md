@@ -1,5 +1,5 @@
 # HIV_Data
-This project analyzed the association between gene mutations and HIV-1 drug resistance. The data set is from [HIV Data Set](http://hivdb.stanford.edu/pages/published_analysis/genophenoPNAS2006). More detials could be found in [Report](https://github.com/denglinsui/HIV_Data/Report\ and\ Slides/Report.pdf).
+This project analyzed the association between gene mutations and HIV-1 drug resistance. The data set is from [HIV Data Set](http://hivdb.stanford.edu/pages/published_analysis/genophenoPNAS2006). More detials could be found in [Report](https://github.com/denglinsui/HIV_Data/ReportAndSlides/Report.pdf).
 
 ## Introduction
 The files in main folder are:
